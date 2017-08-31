@@ -1,17 +1,40 @@
 from __future__ import print_function
-
+from tensorflow.python import pywrap_tensorflow
 import numpy as np
 import tensorflow as tf
 
 import argparse
 import os
-import cPickle
+import _pickle as cPickle
 import copy
 import sys
 import string
 
 from utils import TextLoader
 from model import Model
+import builtins
+names_list=[
+        "rnnlm/softmax_w",
+        "rnnlm/softmax_b",
+        "rnnlm/embedding",
+ "rnnlm/MultiRNNCell/Cell0/GRUCell/Gates/Linear/Matrix",
+ "rnnlm/MultiRNNCell/Cell0/GRUCell/Gates/Linear/Bias",
+  "rnnlm/MultiRNNCell/Cell0/GRUCell/Candidate/Linear/Matrix",
+ "rnnlm/MultiRNNCell/Cell0/GRUCell/Candidate/Linear/Bias",
+"rnnlm/MultiRNNCell/Cell1/GRUCell/Gates/Linear/Matrix",
+ "rnnlm/MultiRNNCell/Cell1/GRUCell/Gates/Linear/Bias",
+  "rnnlm/MultiRNNCell/Cell1/GRUCell/Candidate/Linear/Matrix",
+ "rnnlm/MultiRNNCell/Cell1/GRUCell/Candidate/Linear/Bias",
+ "rnnlm/MultiRNNCell/Cell2/GRUCell/Gates/Linear/Matrix",
+ "rnnlm/MultiRNNCell/Cell2/GRUCell/Gates/Linear/Bias",
+  "rnnlm/MultiRNNCell/Cell2/GRUCell/Candidate/Linear/Matrix",
+ "rnnlm/MultiRNNCell/Cell2/GRUCell/Candidate/Linear/Bias",
+ "rnnlm/MultiRNNCell/Cell3/GRUCell/Gates/Linear/Matrix",
+ "rnnlm/MultiRNNCell/Cell3/GRUCell/Gates/Linear/Bias",
+  "rnnlm/MultiRNNCell/Cell3/GRUCell/Candidate/Linear/Matrix",
+ "rnnlm/MultiRNNCell/Cell3/GRUCell/Candidate/Linear/Bias",
+ 
+]
 
 def main():
     parser = argparse.ArgumentParser()
@@ -35,6 +58,8 @@ def main():
     sample_main(args)
 
 def get_paths(input_path):
+    print (input_path)
+    
     if os.path.isfile(input_path):
         # Passed a model rather than a checkpoint directory
         model_path = input_path
@@ -56,10 +81,10 @@ def sample_main(args):
     # Arguments passed to sample.py direct us to a saved model.
     # Load the separate arguments by which that model was previously trained.
     # That's saved_args. Use those to load the model.
-    with open(config_path) as f:
+    with open(config_path,'rb') as f:
         saved_args = cPickle.load(f)
     # Separately load chars and vocab from the save directory.
-    with open(vocab_path) as f:
+    with open(vocab_path,'rb') as f:
         chars, vocab = cPickle.load(f)
     # Create the model from the saved arguments, in inference mode.
     print("Creating model...")
@@ -68,9 +93,14 @@ def sample_main(args):
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
         tf.initialize_all_variables().run()
-        saver = tf.train.Saver(net.save_variables_list())
+        saver = tf.train.Saver(builtins.dict(zip(names_list,tf.trainable_variables())))
         # Restore the saved variables, replacing the initialized values.
         print("Restoring weights...")
+        reader = pywrap_tensorflow.NewCheckpointReader(model_path)
+        var_to_shape_map = reader.get_variable_to_shape_map()
+        for key in var_to_shape_map:
+            print("tensor_name: ", key)
+    
         saver.restore(sess, model_path)
         chatbot(net, sess, chars, vocab, args.n, args.beam_width, args.relevance, args.temperature)
         #beam_sample(net, sess, chars, vocab, args.n, args.prime,
@@ -127,7 +157,7 @@ def initial_state_with_relevance_masking(net, sess, relevance):
 def chatbot(net, sess, chars, vocab, max_length, beam_width, relevance, temperature):
     states = initial_state_with_relevance_masking(net, sess, relevance)
     while True:
-        user_input = sanitize_text(vocab, raw_input('\n> '))
+        user_input = sanitize_text(vocab, input('\n> '))
         user_command_entered, reset, states, relevance, temperature, beam_width = process_user_command(
             user_input, states, relevance, temperature, beam_width)
         if reset: states = initial_state_with_relevance_masking(net, sess, relevance)
@@ -174,7 +204,7 @@ def process_user_command(user_input, states, relevance, temperature, beam_width)
     return user_command_entered, reset, states, relevance, temperature, beam_width
 
 def consensus_length(beam_outputs, early_term_token):
-    for l in xrange(len(beam_outputs[0])):
+    for l in range(len(beam_outputs[0])):
         if l > 0 and beam_outputs[0][l-1] == early_term_token:
             return l-1, True
         for b in beam_outputs[1:]:
